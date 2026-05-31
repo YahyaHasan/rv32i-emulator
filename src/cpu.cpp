@@ -16,7 +16,7 @@ uint32_t CPU::fetch() {
     uint32_t instr = static_cast<uint32_t>(memory[pc])
                   | (static_cast<uint32_t>(memory[pc + 1]) << 8)
                   | (static_cast<uint32_t>(memory[pc + 2]) << 16)
-                  | (static_cast<uint32_t>(memory[pc + 3] << 24));
+                  | (static_cast<uint32_t>(memory[pc + 3]) << 24);
     pc += 4;
     return instr;
 }
@@ -78,6 +78,60 @@ void CPU::execute(uint32_t instruction) {
 
                 case 0x7:    //ANDI
                     set_register(rd, regs[rs1] & static_cast<uint32_t>(imm));
+                    break;
+            }
+            break;
+        }
+        
+        case 0x33: {    // R-type register-register arithmetic
+            uint8_t rd = rd_of(instruction);
+            uint8_t rs1 = rs1_of(instruction);
+            uint8_t rs2 = rs2_of(instruction);
+            uint8_t funct3 = funct3_of(instruction);
+            uint8_t funct7 = funct7_of(instruction);
+            uint8_t shamt = regs[rs2] & 0x1F;   // shift amount: low 5 bits of rs2
+
+            switch(funct3) {
+                case 0x00:  // SUB/ADD
+                    if (funct7 == 0x20) {   //SUB
+                        set_register(rd, regs[rs1] - regs[rs2]);
+                    }
+                    else {  //ADD
+                        set_register(rd, regs[rs1] + regs[rs2]);
+                    }
+                    break;
+                
+                case 0x1:   // SLL: shift rs1 left by low 5 bits of rs2 (zero-fill)
+                    set_register(rd, regs[rs1] << shamt);
+                    break;
+                
+                case 0x2:   // SLT: rd = 1 if rs1 < rs2 (signed comparison), else 0
+                    set_register(rd, (static_cast<int32_t>(regs[rs1]) < static_cast<int32_t>(regs[rs2])) ? 1 : 0);
+                    break;
+                
+                case 0x3:   // SLTU: rd = 1 if rs1 < rs2 (unsigned comparison), else 0
+                    set_register(rd, (regs[rs1] < regs[rs2]) ? 1 : 0);
+                    break;
+                
+                case 0x4:   // XOR: bitwise exclusive OR
+                    set_register(rd, regs[rs1] ^ regs[rs2]);
+                    break;
+                    
+                case 0x5:   // SRA/SRL
+                    if (funct7 == 0x20) {   // SRA: arithmetic right shift, preserves sign bit
+                        set_register(rd, static_cast<uint32_t>(static_cast<int32_t>(regs[rs1]) >> shamt));
+                    }
+                    else {  // SRL: logical right shift, zero-fills high bits
+                        set_register(rd, regs[rs1] >> shamt);
+                    }
+                    break;
+
+                case 0x6:   // OR: bitwise inclusive OR
+                    set_register(rd, regs[rs1] | regs[rs2]);
+                    break;
+                
+                case 0x7:   // AND: bitwise AND
+                    set_register(rd, regs[rs1] & regs[rs2]);
                     break;
             }
             break;

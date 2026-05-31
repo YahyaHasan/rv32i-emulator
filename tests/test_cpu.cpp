@@ -173,3 +173,89 @@ TEST(SRLI_vs_SRAI, DiffersOnNegativeInput) {
     EXPECT_EQ(cpu.get_register(1), 0xFFFFFFFFu);
 }
 
+// ---- R-type arithmetic ----
+
+TEST(ADD, AddsRegisters) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // ADDI x1, x0, 5
+    cpu.execute(0x00300113);  // ADDI x2, x0, 3
+    cpu.execute(0x002081B3);  // ADD  x3, x1, x2
+    EXPECT_EQ(cpu.get_register(3), 8u);
+}
+
+TEST(SUB, SubtractsRegisters) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // x1 = 5
+    cpu.execute(0x00300113);  // x2 = 3
+    cpu.execute(0x402081B3);  // SUB x3, x1, x2 = 2
+    EXPECT_EQ(cpu.get_register(3), 2u);
+}
+
+TEST(SUB, WrapsOnUnderflow) {
+    CPU cpu;
+    cpu.execute(0x00300093);  // x1 = 3
+    cpu.execute(0x00500113);  // x2 = 5
+    cpu.execute(0x402081B3);  // SUB x3, x1, x2 = 3 - 5 wraps to 0xFFFFFFFE
+    EXPECT_EQ(cpu.get_register(3), 0xFFFFFFFEu);
+}
+
+TEST(SLL, ShiftsByRegisterValue) {
+    CPU cpu;
+    cpu.execute(0x00100093);  // x1 = 1
+    cpu.execute(0x00400113);  // x2 = 4
+    cpu.execute(0x002091B3);  // SLL x3, x1, x2 = 16
+    EXPECT_EQ(cpu.get_register(3), 16u);
+}
+
+TEST(SLT, SignedLessThan) {
+    CPU cpu;
+    cpu.execute(0xFFF00093);  // x1 = -1
+    cpu.execute(0x00500113);  // x2 = 5
+    cpu.execute(0x0020A1B3);  // SLT x3, x1, x2 = 1  (signed: -1 < 5)
+    EXPECT_EQ(cpu.get_register(3), 1u);
+}
+
+TEST(SLTU, UnsignedTreatsNegativeAsLarge) {
+    CPU cpu;
+    cpu.execute(0xFFF00093);  // x1 = 0xFFFFFFFF
+    cpu.execute(0x00500113);  // x2 = 5
+    cpu.execute(0x0020B1B3);  // SLTU x3, x1, x2 = 0  (unsigned: 0xFFFFFFFF > 5)
+    EXPECT_EQ(cpu.get_register(3), 0u);
+}
+
+TEST(XOR, BitwiseXor) {
+    CPU cpu;
+    cpu.execute(0x0AA00093);  // x1 = 0xAA
+    cpu.execute(0x0FF00113);  // x2 = 0xFF
+    cpu.execute(0x0020C1B3);  // XOR x3, x1, x2 = 0x55
+    EXPECT_EQ(cpu.get_register(3), 0x55u);
+}
+
+TEST(SRL_vs_SRA, DiffersOnNegativeInput) {
+    // Same source, same shift amount, different funct7. The contrast is the point.
+    CPU cpu;
+    cpu.execute(0xFFF00093);  // x1 = 0xFFFFFFFF
+    cpu.execute(0x00400113);  // x2 = 4
+    cpu.execute(0x0020D1B3);  // SRL x3, x1, x2 = 0x0FFFFFFF (zero-fills)
+    EXPECT_EQ(cpu.get_register(3), 0x0FFFFFFFu);
+
+    cpu.execute(0x4020D1B3);  // SRA x3, x1, x2 = 0xFFFFFFFF (sign-extends)
+    EXPECT_EQ(cpu.get_register(3), 0xFFFFFFFFu);
+}
+
+TEST(OR, BitwiseOr) {
+    CPU cpu;
+    cpu.execute(0x00F00093);  // x1 = 0x0F
+    cpu.execute(0x0F000113);  // x2 = 0xF0
+    cpu.execute(0x0020E1B3);  // OR x3, x1, x2 = 0xFF
+    EXPECT_EQ(cpu.get_register(3), 0xFFu);
+}
+
+TEST(AND, BitwiseAnd) {
+    CPU cpu;
+    cpu.execute(0xFFF00093);  // x1 = 0xFFFFFFFF
+    cpu.execute(0x0F000113);  // x2 = 0xF0
+    cpu.execute(0x0020F1B3);  // AND x3, x1, x2 = 0xF0
+    EXPECT_EQ(cpu.get_register(3), 0xF0u);
+}
+
