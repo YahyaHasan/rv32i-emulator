@@ -259,3 +259,60 @@ TEST(AND, BitwiseAnd) {
     EXPECT_EQ(cpu.get_register(3), 0xF0u);
 }
 
+// ---- Loads ----
+
+TEST(LW, ReadsLittleEndianWord) {
+    CPU cpu;
+    // Write 0xDEADBEEF at address 0x100 in little-endian order
+    cpu.write_byte(0x100, 0xEF);
+    cpu.write_byte(0x101, 0xBE);
+    cpu.write_byte(0x102, 0xAD);
+    cpu.write_byte(0x103, 0xDE);
+    cpu.execute(0x10000093);  // ADDI x1, x0, 0x100
+    cpu.execute(0x0000A103);  // LW x2, 0(x1)
+    EXPECT_EQ(cpu.get_register(2), 0xDEADBEEFu);
+}
+
+TEST(LB, SignExtendsNegativeByte) {
+    CPU cpu;
+    cpu.write_byte(0x100, 0xFF);  // -1 as int8_t
+    cpu.execute(0x10000093);      // x1 = 0x100
+    cpu.execute(0x00008103);      // LB x2, 0(x1)
+    EXPECT_EQ(cpu.get_register(2), 0xFFFFFFFFu);
+}
+
+TEST(LBU, ZeroExtendsByte) {
+    // Same source byte as LB test, different funct3, different result.
+    CPU cpu;
+    cpu.write_byte(0x100, 0xFF);
+    cpu.execute(0x10000093);      // x1 = 0x100
+    cpu.execute(0x0000C103);      // LBU x2, 0(x1)
+    EXPECT_EQ(cpu.get_register(2), 0xFFu);
+}
+
+TEST(LH, SignExtendsNegativeHalf) {
+    CPU cpu;
+    cpu.write_byte(0x100, 0x00);
+    cpu.write_byte(0x101, 0x80);  // 0x8000 = -32768 as int16_t
+    cpu.execute(0x10000093);      // x1 = 0x100
+    cpu.execute(0x00009103);      // LH x2, 0(x1)
+    EXPECT_EQ(cpu.get_register(2), 0xFFFF8000u);
+}
+
+TEST(LHU, ZeroExtendsHalf) {
+    CPU cpu;
+    cpu.write_byte(0x100, 0x00);
+    cpu.write_byte(0x101, 0x80);
+    cpu.execute(0x10000093);      // x1 = 0x100
+    cpu.execute(0x0000D103);      // LHU x2, 0(x1)
+    EXPECT_EQ(cpu.get_register(2), 0x00008000u);
+}
+
+TEST(Load, UsesNegativeOffset) {
+    CPU cpu;
+    cpu.write_byte(0x100, 0x42);
+    cpu.execute(0x10400093);      // x1 = 0x104
+    cpu.execute(0xFFC0C103);      // LBU x2, -4(x1)  → reads memory[0x100]
+    EXPECT_EQ(cpu.get_register(2), 0x42u);
+}
+

@@ -32,6 +32,45 @@ void CPU::execute(uint32_t instruction) {
     uint8_t opcode = opcode_of(instruction);
 
     switch(opcode) {
+        case 0x03: {    // I-type loads (LB, LH, LW, LBU, LHU)
+            uint8_t rd = rd_of(instruction);
+            uint8_t rs1 = rs1_of(instruction);
+            uint8_t funct3 = funct3_of(instruction);
+            uint32_t imm = immI_of(instruction);
+            uint32_t addy = regs[rs1] + static_cast<uint32_t>(imm);
+
+            switch(funct3) {
+                case 0x0: {     // LB: load 1 byte, sign-extend to 32 bits
+                    int8_t byte = static_cast<int8_t>(memory[addy]);
+                    set_register(rd, static_cast<uint32_t>(static_cast<int32_t>(byte)));
+                    break;
+                }
+                case 0x1: {     // LH: load 2 bytes (little-endian), sign-extend to 32 bits
+                    int16_t raw = static_cast<int8_t>(memory[addy])
+                                | (static_cast<int8_t>(memory[addy + 1]) << 8);
+                    int16_t half = static_cast<int16_t>(raw);
+                    set_register(rd, static_cast<uint32_t>(static_cast<int32_t>(half)));
+                    break;
+                }
+                case 0x2: {     // LW: load 4 bytes (little-endian), no extension needed
+                    uint32_t word = static_cast<uint32_t>(memory[addy])
+                                 | (static_cast<uint32_t>(memory[addy + 1] << 8))
+                                 | (static_cast<uint32_t>(memory[addy + 2] << 16))
+                                 | (static_cast<uint32_t>(memory[addy + 3] << 24));
+                    set_register(rd, word);
+                    break;
+                }
+                case 0x4:       // LBU: load 1 byte, zero-extend to 32 bits
+                    set_register(rd, static_cast<uint32_t>(memory[addy]));
+                    break;
+                case 0x5: {     // LHU: load 2 bytes, zero-extend to 32 bits
+                    uint16_t half = static_cast<uint16_t>(memory[addy])
+                                 | (static_cast<uint16_t>(memory[addy + 1] << 8));
+                    set_register(rd, half);
+                }
+            }
+            break;
+        }
         case 0x13: {    // I-type arithmetic (ADDI, ANDI, ORI, ...)
             uint8_t rd = rd_of(instruction);
             uint8_t rs1 = rs1_of(instruction);

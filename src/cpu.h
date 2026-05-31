@@ -21,6 +21,9 @@ class CPU {
         uint32_t get_pc() const {return pc; }
         uint32_t get_register(uint8_t index) const;
 
+        // helper for tests; poke a single byte into the memory array.
+        void write_byte(uint32_t addy, uint8_t value) {memory[addy] = value; }
+
     private:
         // read 4 bytes from memory at pc, little-endian
         uint32_t fetch();
