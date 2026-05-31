@@ -115,3 +115,61 @@ TEST(ADDI, LoadImmediateIdiom) {
     EXPECT_EQ(cpu.get_register(1), 123u);
 }
 
+// ---- SLTI / SLTIU ----
+
+TEST(SLTI, SignedLessThanReturnsOne) {
+    CPU cpu;
+    cpu.execute(0xFFF00113);  // ADDI x2, x0, -1   (x2 = -1)
+    cpu.execute(0x00512093);  // SLTI x1, x2, 5    (signed: -1 < 5)
+    EXPECT_EQ(cpu.get_register(1), 1u);
+}
+
+TEST(SLTIU, UnsignedComparisonTreatsNegativeAsLarge) {
+    CPU cpu;
+    cpu.execute(0xFFF00113);  // ADDI x2, x0, -1   (x2 = -1 = 0xFFFFFFFF unsigned)
+    cpu.execute(0x00513093);  // SLTIU x1, x2, 5   (unsigned: 0xFFFFFFFF >= 5)
+    EXPECT_EQ(cpu.get_register(1), 0u);
+}
+
+// ---- XORI / ORI / ANDI ----
+
+TEST(XORI, NegOneInvertsAllBits) {
+    CPU cpu;
+    cpu.execute(0x00F00113);  // ADDI x2, x0, 15   (x2 = 0x0F)
+    cpu.execute(0xFFF14093);  // XORI x1, x2, -1   (NOT idiom)
+    EXPECT_EQ(cpu.get_register(1), 0xFFFFFFF0u);
+}
+
+TEST(ANDI, MasksLowByte) {
+    CPU cpu;
+    cpu.execute(0xFFF00113);  // ADDI x2, x0, -1   (x2 = 0xFFFFFFFF)
+    cpu.execute(0x0FF17093);  // ANDI x1, x2, 0xFF (keep low byte only)
+    EXPECT_EQ(cpu.get_register(1), 0xFFu);
+}
+
+TEST(ORI, SetsHighNibble) {
+    CPU cpu;
+    cpu.execute(0x00F00113);  // ADDI x2, x0, 15   (x2 = 0x0F)
+    cpu.execute(0x00F16093);  // ORI x1, x2, 0x0F
+    EXPECT_EQ(cpu.get_register(1), 0x0Fu);
+}
+
+// ---- Shifts ----
+
+TEST(SLLI, ShiftsLeftByImmediate) {
+    CPU cpu;
+    cpu.execute(0x00100113);  // ADDI x2, x0, 1
+    cpu.execute(0x00411093);  // SLLI x1, x2, 4    (1 << 4 = 16)
+    EXPECT_EQ(cpu.get_register(1), 16u);
+}
+
+TEST(SRLI_vs_SRAI, DiffersOnNegativeInput) {
+    CPU cpu;
+    cpu.execute(0xFFF00113);  // ADDI x2, x0, -1   (x2 = 0xFFFFFFFF)
+    cpu.execute(0x00415093);  // SRLI x1, x2, 4    (logical: 0x0FFFFFFF)
+    EXPECT_EQ(cpu.get_register(1), 0x0FFFFFFFu);
+
+    cpu.execute(0x40415093);  // SRAI x1, x2, 4    (arithmetic: stays 0xFFFFFFFF)
+    EXPECT_EQ(cpu.get_register(1), 0xFFFFFFFFu);
+}
+
