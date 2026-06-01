@@ -58,8 +58,6 @@ class CPU {
         // helper for tests: read a single byte from  memory
         uint8_t read_byte(uint32_t addy) const {return memory[addy]; }
 
-        bool is_halted() const { return halted; }
-
     private:
         // read 4 bytes from memory at pc, little-endian
         uint32_t fetch();
@@ -73,6 +71,4 @@ class CPU {
 
         //Write to register. Every instruction that writes a register must go through this function.
         void set_register(uint8_t index, uint32_t value);
-
-        bool halted = false;    // set by ECALL/EBREAK; main loop checks this to stop cycling
 };

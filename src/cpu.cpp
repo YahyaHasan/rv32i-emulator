@@ -278,21 +278,6 @@ void CPU::execute(uint32_t instruction) {
             next_pc = jump_loc;
             break;
         }
-
-        case 0x73: {    // SYSTEM opcode (ECALL, EBREAK)
-            uint32_t funct12 = (instruction >> 20) & 0xFFF;
-            if (funct12 == 0x0) {
-                // ECALL: environment call (syscall entry point).
-                // Phase 2 will inspect a7/x17 and dispatch real syscalls.
-                // For now, halt so the run loop knows execution is done.
-                halted = true;
-            }
-            else if (funct12 == 0x1) {
-                // EBREAK: debugger breakpoint. Halt.
-                halted = true;
-            }
-            break;
-        }
     }
 
     pc = next_pc;
