@@ -573,3 +573,22 @@ TEST(AUIPC, AddsPCToUpperImmediate) {
     EXPECT_EQ(cpu.get_register(2), 0x12345004u);
 }
 
+TEST(ECALL, SetsHaltedFlag) {
+    CPU cpu;
+    EXPECT_FALSE(cpu.is_halted());
+    cpu.execute(0x00000073);  // ECALL
+    EXPECT_TRUE(cpu.is_halted());
+}
+
+TEST(EBREAK, SetsHaltedFlag) {
+    CPU cpu;
+    cpu.execute(0x00100073);  // EBREAK
+    EXPECT_TRUE(cpu.is_halted());
+}
+
+TEST(ECALL, PCStillAdvances) {
+    CPU cpu;
+    cpu.execute(0x00000073);  // ECALL at pc=0
+    EXPECT_EQ(cpu.get_pc(), 4u);   // pc still moved to next slot
+}
+
