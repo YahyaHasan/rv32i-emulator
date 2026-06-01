@@ -34,7 +34,7 @@ int main() {
         cpu.execute(0x00300113);  // ADDI x2, x0, 3
         cpu.execute(0x002081B3);  // ADD  x3, x1, x2    = 13
         cpu.execute(0x40208233);  // SUB  x4, x1, x2    = 7
-        cpu.execute(0x123450B7);  // LUI  x5, 0x12345   = 0x12345000
+        cpu.execute(0x123452B7);  // LUI  x5, 0x12345   = 0x12345000
         cpu.execute(0x67828293);  // ADDI x5, x5, 0x678 = 0x12345678
 
         std::cout << "  10 + 3          = " << cpu.get_register(3) << "\n";
@@ -48,7 +48,6 @@ int main() {
     {
         CPU cpu;
         cpu.execute(0x40000093);  // ADDI x1, x0, 0x400    (base address)
-        cpu.execute(0xDEA00113);  // can't do 0xDEAD this way; use a small value
         cpu.execute(0x0AB00113);  // ADDI x2, x0, 0xAB     (value)
         cpu.execute(0x00208023);  // SB   x2, 0(x1)
         cpu.execute(0x0000C183);  // LBU  x3, 0(x1)        (load it back)
