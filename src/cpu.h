@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <vector>
 #include <cstdint>
 
 inline uint8_t opcode_of(uint32_t instr) {return instr & 0x7F; }
@@ -67,7 +68,7 @@ class CPU {
         std::array<uint32_t, 32> regs{};
 
         //1 MiB of simulated memory
-        std::array<uint32_t, 1024 * 1024> memory{};
+        std::vector<uint8_t> memory;
         uint32_t pc = 0;
 
         //Write to register. Every instruction that writes a register must go through this function.

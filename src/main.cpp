@@ -23,7 +23,7 @@ static uint32_t read_word(CPU& cpu, uint32_t addr) {
 }
 
 int main() {
-    std::cout << "RISC-V RV32I Emulator  --  Phase 1\n";
+    std::cout << "\nRISC-V RV32I Emulator  --  Phase 1\n";
     std::cout << "===================================\n";
 
     // ---- Arithmetic ----

@@ -1,6 +1,6 @@
 #include "cpu.h"
 
-CPU::CPU() = default;   //default constructor
+CPU::CPU() : memory(1024 * 1024, 0) {}
 
 uint32_t CPU::get_register(uint8_t index) const {
     return regs[index];
