@@ -121,6 +121,42 @@ void CPU::execute(uint32_t instruction) {
             }
             break;
         }
+
+        case 0x23: {    // S-type stores (SB, SH, SW)
+            uint8_t rs1 = rs1_of(instruction);
+            uint8_t rs2 = rs2_of(instruction);
+            uint8_t funct3 = funct3_of(instruction);
+            uint32_t imm = immS_of(instruction);
+            uint32_t addy = regs[rs1] + static_cast<uint32_t>(imm);
+            uint32_t rs2_value = regs[rs2];
+
+            switch(funct3) {
+                case 0x0: {     // SB: store low 8 bits of rs2
+                    uint8_t byte = static_cast<uint8_t>(rs2_value & 0xFF);
+                    memory[addy] = byte;
+                    break;
+                }
+                case 0x1: {     // SH: store low 16 bits of rs2, little-endian
+                    uint8_t byte1 = static_cast<uint8_t>(rs2_value & 0xFF);
+                    uint8_t byte2 = static_cast<uint8_t>((rs2_value >> 8) & 0xFF);
+                    memory[addy] = byte1;
+                    memory[addy + 1] = byte2;
+                    break;
+                }
+                case 0x2: {     // SW: store all 32 bits of rs2, little-endian
+                    uint8_t byte1 = static_cast<uint8_t>(rs2_value & 0xFF);
+                    uint8_t byte2 = static_cast<uint8_t>((rs2_value >> 8) & 0xFF);
+                    uint8_t byte3 = static_cast<uint8_t>((rs2_value >> 16) & 0xFF);
+                    uint8_t byte4 = static_cast<uint8_t>((rs2_value >> 24) & 0xFF);
+                    memory[addy] = byte1;
+                    memory[addy + 1] = byte2;
+                    memory[addy + 2] = byte3;
+                    memory[addy + 3] = byte4;
+                    break;
+                }
+            }
+            break;
+        }
         
         case 0x33: {    // R-type register-register arithmetic
             uint8_t rd = rd_of(instruction);

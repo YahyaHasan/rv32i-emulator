@@ -11,6 +11,13 @@ inline uint8_t rs2_of(uint32_t instr) {return (instr >> 20) & 0x1F; }
 inline uint8_t funct7_of(uint32_t instr) {return (instr >> 25) & 0x7F; }
 
 inline int32_t immI_of(uint32_t instr) { return static_cast<int32_t>(instr) >> 20; }
+inline int32_t immS_of(uint32_t instr) {
+    // S-type immediate: imm[11:5] at bits 31:25 of instr, imm[4:0] at bits 11:7
+    uint32_t hi = (instr >> 25) & 0x7F;     // imm[11:5]
+    uint32_t lo = (instr >> 7) & 0x1F;      // imm[4:0]
+    uint32_t raw = (hi << 5) | lo;
+    return static_cast<int32_t>(raw << 20) >> 20;   // sign-extension
+}
 
 
 class CPU {
@@ -21,8 +28,11 @@ class CPU {
         uint32_t get_pc() const {return pc; }
         uint32_t get_register(uint8_t index) const;
 
-        // helper for tests; poke a single byte into the memory array.
+        // helper for tests; write a single byte into memory
         void write_byte(uint32_t addy, uint8_t value) {memory[addy] = value; }
+
+        // helper for tests: read a single byte from  memory
+        uint8_t read_byte(uint32_t addy) const {return memory[addy]; }
 
     private:
         // read 4 bytes from memory at pc, little-endian

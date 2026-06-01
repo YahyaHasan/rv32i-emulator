@@ -316,3 +316,81 @@ TEST(Load, UsesNegativeOffset) {
     EXPECT_EQ(cpu.get_register(2), 0x42u);
 }
 
+// ---- S-type immediate ----
+
+TEST(Decoder, ExtractsPositiveSImmediate) {
+    // SW x2, 4(x1) = 0x00208223 → imm = 4
+    EXPECT_EQ(immS_of(0x00208223), 4);
+}
+
+TEST(Decoder, ExtractsNegativeSImmediate) {
+    // SB x2, -4(x1) = 0xFE208E23 → imm = -4
+    EXPECT_EQ(immS_of(0xFE208E23), -4);
+}
+
+// ---- Stores ----
+
+TEST(SB, WritesLowByte) {
+    CPU cpu;
+    cpu.execute(0x10000093);  // x1 = 0x100
+    cpu.execute(0x0FF00113);  // x2 = 0xFF
+    cpu.execute(0x00208023);  // SB x2, 0(x1)
+    EXPECT_EQ(cpu.read_byte(0x100), 0xFFu);
+}
+
+TEST(SB, IgnoresUpperBitsOfSource) {
+    CPU cpu;
+    cpu.execute(0x10000093);  // x1 = 0x100
+    cpu.execute(0xFFF00113);  // x2 = 0xFFFFFFFF
+    cpu.execute(0x00208023);  // SB x2, 0(x1)
+    EXPECT_EQ(cpu.read_byte(0x100), 0xFFu);
+    EXPECT_EQ(cpu.read_byte(0x101), 0x00u);   // adjacent byte untouched
+}
+
+TEST(SH, WritesLittleEndianHalfword) {
+    CPU cpu;
+    cpu.execute(0x10000093);  // x1 = 0x100
+    cpu.execute(0xFFF00113);  // x2 = 0xFFFFFFFF
+    cpu.execute(0x00209023);  // SH x2, 0(x1)
+    EXPECT_EQ(cpu.read_byte(0x100), 0xFFu);
+    EXPECT_EQ(cpu.read_byte(0x101), 0xFFu);
+    EXPECT_EQ(cpu.read_byte(0x102), 0x00u);
+}
+
+TEST(SW, WritesAllFourBytes) {
+    CPU cpu;
+    cpu.execute(0x10000093);  // x1 = 0x100
+    cpu.execute(0xFFF00113);  // x2 = 0xFFFFFFFF
+    cpu.execute(0x0020A023);  // SW x2, 0(x1)
+    EXPECT_EQ(cpu.read_byte(0x100), 0xFFu);
+    EXPECT_EQ(cpu.read_byte(0x101), 0xFFu);
+    EXPECT_EQ(cpu.read_byte(0x102), 0xFFu);
+    EXPECT_EQ(cpu.read_byte(0x103), 0xFFu);
+}
+
+TEST(SW, PreservesByteOrderEndToEnd) {
+    // Read a known 4-byte sequence in via LW, then write it back via SW.
+    // The output bytes must match the input bytes in the same order.
+    CPU cpu;
+    cpu.write_byte(0x200, 0x78);
+    cpu.write_byte(0x201, 0x56);
+    cpu.write_byte(0x202, 0x34);
+    cpu.write_byte(0x203, 0x12);
+    cpu.execute(0x10000093);  // x1 = 0x100
+    cpu.execute(0x20000113);  // x2 = 0x200
+    cpu.execute(0x00012183);  // LW x3, 0(x2)   → x3 = 0x12345678
+    cpu.execute(0x0030A023);  // SW x3, 0(x1)
+    EXPECT_EQ(cpu.read_byte(0x100), 0x78u);
+    EXPECT_EQ(cpu.read_byte(0x101), 0x56u);
+    EXPECT_EQ(cpu.read_byte(0x102), 0x34u);
+    EXPECT_EQ(cpu.read_byte(0x103), 0x12u);
+}
+
+TEST(SB, WritesAtNegativeOffset) {
+    CPU cpu;
+    cpu.execute(0x10400093);  // x1 = 0x104
+    cpu.execute(0x07B00113);  // x2 = 123
+    cpu.execute(0xFE208E23);  // SB x2, -4(x1)  → writes to memory[0x100]
+    EXPECT_EQ(cpu.read_byte(0x100), 123u);
+}
+
