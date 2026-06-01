@@ -17,7 +17,6 @@ uint32_t CPU::fetch() {
                   | (static_cast<uint32_t>(memory[pc + 1]) << 8)
                   | (static_cast<uint32_t>(memory[pc + 2]) << 16)
                   | (static_cast<uint32_t>(memory[pc + 3]) << 24);
-    pc += 4;
     return instr;
 }
 
@@ -30,13 +29,14 @@ void CPU::set_register(uint8_t index, uint32_t value) {
 
 void CPU::execute(uint32_t instruction) {
     uint8_t opcode = opcode_of(instruction);
+    uint32_t next_pc = pc + 4;  // default
 
     switch(opcode) {
         case 0x03: {    // I-type loads (LB, LH, LW, LBU, LHU)
             uint8_t rd = rd_of(instruction);
             uint8_t rs1 = rs1_of(instruction);
             uint8_t funct3 = funct3_of(instruction);
-            uint32_t imm = immI_of(instruction);
+            int32_t imm = immI_of(instruction);
             uint32_t addy = regs[rs1] + static_cast<uint32_t>(imm);
 
             switch(funct3) {
@@ -46,17 +46,17 @@ void CPU::execute(uint32_t instruction) {
                     break;
                 }
                 case 0x1: {     // LH: load 2 bytes (little-endian), sign-extend to 32 bits
-                    int16_t raw = static_cast<int8_t>(memory[addy])
-                                | (static_cast<int8_t>(memory[addy + 1]) << 8);
+                    int16_t raw = static_cast<int16_t>(memory[addy])
+                                | (static_cast<int16_t>(memory[addy + 1]) << 8);
                     int16_t half = static_cast<int16_t>(raw);
                     set_register(rd, static_cast<uint32_t>(static_cast<int32_t>(half)));
                     break;
                 }
                 case 0x2: {     // LW: load 4 bytes (little-endian), no extension needed
                     uint32_t word = static_cast<uint32_t>(memory[addy])
-                                 | (static_cast<uint32_t>(memory[addy + 1] << 8))
-                                 | (static_cast<uint32_t>(memory[addy + 2] << 16))
-                                 | (static_cast<uint32_t>(memory[addy + 3] << 24));
+                                 | (static_cast<uint32_t>(memory[addy + 1]) << 8)
+                                 | (static_cast<uint32_t>(memory[addy + 2]) << 16)
+                                 | (static_cast<uint32_t>(memory[addy + 3]) << 24);
                     set_register(rd, word);
                     break;
                 }
@@ -65,12 +65,14 @@ void CPU::execute(uint32_t instruction) {
                     break;
                 case 0x5: {     // LHU: load 2 bytes, zero-extend to 32 bits
                     uint16_t half = static_cast<uint16_t>(memory[addy])
-                                 | (static_cast<uint16_t>(memory[addy + 1] << 8));
+                                 | (static_cast<uint16_t>(memory[addy + 1]) << 8);
                     set_register(rd, half);
+                    break;
                 }
             }
             break;
         }
+
         case 0x13: {    // I-type arithmetic (ADDI, ANDI, ORI, ...)
             uint8_t rd = rd_of(instruction);
             uint8_t rs1 = rs1_of(instruction);
@@ -122,11 +124,18 @@ void CPU::execute(uint32_t instruction) {
             break;
         }
 
+        case 0x17: {    // AUIPC: add upper immediate to pc, store in rd (for pc-relative addressing)
+            uint8_t rd = rd_of(instruction);
+            uint32_t imm = immU_of(instruction);
+            set_register(rd, pc + imm);
+            break;
+        }
+
         case 0x23: {    // S-type stores (SB, SH, SW)
             uint8_t rs1 = rs1_of(instruction);
             uint8_t rs2 = rs2_of(instruction);
             uint8_t funct3 = funct3_of(instruction);
-            uint32_t imm = immS_of(instruction);
+            int32_t imm = immS_of(instruction);
             uint32_t addy = regs[rs1] + static_cast<uint32_t>(imm);
             uint32_t rs2_value = regs[rs2];
 
@@ -211,5 +220,65 @@ void CPU::execute(uint32_t instruction) {
             }
             break;
         }
+
+        case 0x37: {    // LUI: place 20-bit immediate in upper bits of rd, lower 12 bits zeroed
+            uint8_t rd = rd_of(instruction);
+            uint32_t imm = immU_of(instruction);
+            set_register(rd, imm);
+            break;
+        }
+
+        case 0x63: {    // B-type branches
+            uint8_t rs1 = rs1_of(instruction);
+            uint8_t rs2 = rs2_of(instruction);
+            uint8_t funct3 = funct3_of(instruction);
+            int32_t imm = immB_of(instruction);
+            bool jump = false;
+
+            switch(funct3) {
+                case 0x0:   // BEQ: branch if rs1 == rs2
+                    jump = regs[rs1] == regs[rs2];
+                    break;
+                case 0x1:   // BNE: branch if rs1 != rs2
+                    jump = regs[rs1] != regs[rs2];
+                    break;
+                case 0x4:   // BLT: branch if rs1 < rs2 (signed)
+                    jump = static_cast<int32_t>(regs[rs1]) < static_cast<int32_t>(regs[rs2]);
+                    break;
+                case 0x5:   // BGE: branch if rs1 >= rs2 (signed)
+                    jump = static_cast<int32_t>(regs[rs1]) >= static_cast<int32_t>(regs[rs2]);
+                    break;
+                case 0x6:   // BLTU: branch if rs1 < rs2 (unsigned)
+                    jump = regs[rs1] < regs[rs2];
+                    break;
+                case 0x7:   // BGEU: branch if rs1 >= rs2 (unsigned)
+                    jump = regs[rs1] >= regs[rs2];
+                    break;
+            }
+            if (jump) {
+                next_pc = pc + static_cast<uint32_t>(imm);
+            }
+            break;
+        }
+
+        case 0x6F: {    // JAL: jump to pc + imm, save return address in rd
+            uint8_t rd = rd_of(instruction);
+            int32_t imm = immJ_of(instruction);
+            set_register(rd, next_pc);
+            next_pc = pc + static_cast<uint32_t>(imm);
+            break;
+        }
+
+        case 0x67: {    // JALR: jump to (rs1 + imm) with LSB cleared, save return address in rd
+            uint8_t rd = rd_of(instruction);
+            uint8_t rs1 = rs1_of(instruction);
+            int32_t imm = immI_of(instruction);
+            uint32_t jump_loc = (regs[rs1] + static_cast<uint32_t>(imm)) & ~1u;
+            set_register(rd, next_pc);
+            next_pc = jump_loc;
+            break;
+        }
     }
+
+    pc = next_pc;
 }

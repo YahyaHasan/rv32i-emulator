@@ -394,3 +394,182 @@ TEST(SB, WritesAtNegativeOffset) {
     EXPECT_EQ(cpu.read_byte(0x100), 123u);
 }
 
+// ---- B-type immediate ----
+
+TEST(Decoder, ExtractsPositiveBImmediate) {
+    // BEQ x1, x2, +8 = 0x00208463
+    EXPECT_EQ(immB_of(0x00208463), 8);
+}
+
+TEST(Decoder, ExtractsNegativeBImmediate) {
+    // BEQ x1, x2, -8 = 0xFE208CE3
+    EXPECT_EQ(immB_of(0xFE208CE3), -8);
+}
+
+// ---- Branches ----
+
+TEST(BEQ, TakenWhenEqual) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // x1 = 5
+    cpu.execute(0x00500113);  // x2 = 5
+    // After the two ADDIs, pc has advanced to 8.
+    cpu.execute(0x00208463);  // BEQ x1, x2, +8  → next_pc = 8 + 8 = 16
+    EXPECT_EQ(cpu.get_pc(), 16u);
+}
+
+TEST(BEQ, NotTakenWhenUnequal) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // x1 = 5
+    cpu.execute(0x00300113);  // x2 = 3
+    // pc is now 8. Branch should fall through to pc + 4 = 12.
+    cpu.execute(0x00208463);  // BEQ x1, x2, +8 (not taken)
+    EXPECT_EQ(cpu.get_pc(), 12u);
+}
+
+TEST(BNE, TakenWhenUnequal) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // x1 = 5
+    cpu.execute(0x00300113);  // x2 = 3
+    cpu.execute(0x00209463);  // BNE x1, x2, +8
+    EXPECT_EQ(cpu.get_pc(), 16u);
+}
+
+TEST(BLT, TakenForNegativeRs1) {
+    CPU cpu;
+    cpu.execute(0xFFF00093);  // x1 = -1
+    cpu.execute(0x00500113);  // x2 = 5
+    cpu.execute(0x0020C463);  // BLT x1, x2, +8  (signed: -1 < 5)
+    EXPECT_EQ(cpu.get_pc(), 16u);
+}
+
+TEST(BLTU_vs_BLT, DiffersOnNegativeRs1) {
+    // Same registers, same offset; BLTU and BLT disagree because BLTU treats
+    // 0xFFFFFFFF as huge (unsigned) while BLT treats it as -1 (signed).
+    CPU cpu;
+    cpu.execute(0xFFF00093);  // x1 = 0xFFFFFFFF (-1 signed)
+    cpu.execute(0x00500113);  // x2 = 5
+    // pc = 8.
+    cpu.execute(0x0020E463);  // BLTU x1, x2, +8 (unsigned: 0xFFFFFFFF > 5, not taken)
+    EXPECT_EQ(cpu.get_pc(), 12u);
+}
+
+TEST(BGE, TakenForGreaterSigned) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // x1 = 5
+    cpu.execute(0xFFF00113);  // x2 = -1
+    cpu.execute(0x0020D463);  // BGE x1, x2, +8  (signed: 5 >= -1)
+    EXPECT_EQ(cpu.get_pc(), 16u);
+}
+
+TEST(BGEU, NotTakenWhenRs1IsZero) {
+    CPU cpu;
+    // Without any setup, x0 stays 0 and x1 starts at 0.
+    cpu.execute(0x00100113);  // x2 = 1
+    cpu.execute(0x0020F063);  // BGEU x1, x2, +0  (unsigned: 0 >= 1 is false)
+    EXPECT_EQ(cpu.get_pc(), 8u);  // fall through, pc was 4 → +4 = 8
+}
+
+TEST(BEQ, BranchesBackward) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // x1 = 5;    pc = 0 → 4
+    cpu.execute(0x00500113);  // x2 = 5;    pc = 4 → 8
+    cpu.execute(0xFE208CE3);  // BEQ x1, x2, -8 (taken) → next_pc = 8 + (-8) = 0
+    EXPECT_EQ(cpu.get_pc(), 0u);
+}
+
+// ---- J-type immediate ----
+
+TEST(Decoder, ExtractsPositiveJImmediate) {
+    // JAL x1, 0x100 = 0x100000EF
+    EXPECT_EQ(immJ_of(0x100000EF), 0x100);
+}
+
+TEST(Decoder, ExtractsNegativeJImmediate) {
+    // JAL x1, -4 = 0xFFDFF0EF
+    EXPECT_EQ(immJ_of(0xFFDFF0EF), -4);
+}
+
+// ---- JAL ----
+
+TEST(JAL, JumpsAndSavesReturnAddress) {
+    CPU cpu;
+    // pc = 0. JAL x1, 0x100. After: x1 = 4 (return addr), pc = 0x100.
+    cpu.execute(0x100000EF);  // JAL x1, 0x100
+    EXPECT_EQ(cpu.get_register(1), 4u);
+    EXPECT_EQ(cpu.get_pc(), 0x100u);
+}
+
+TEST(JAL, JumpsBackward) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // ADDI x1, x0, 5   (pc: 0 → 4)
+    cpu.execute(0xFFDFF0EF);  // JAL x1, -4        (pc: 4 → 0)
+    EXPECT_EQ(cpu.get_pc(), 0u);
+}
+
+TEST(JAL, WritesToX0Discarded) {
+    CPU cpu;
+    cpu.execute(0x1000006F);  // JAL x0, 0x100
+    EXPECT_EQ(cpu.get_register(0), 0u);   // return address discarded
+    EXPECT_EQ(cpu.get_pc(), 0x100u);      // jump still happens
+}
+
+// ---- JALR ----
+
+TEST(JALR, JumpsToRegisterPlusOffset) {
+    CPU cpu;
+    cpu.execute(0x20000113);  // ADDI x2, x0, 0x200  (pc: 0 → 4)
+    cpu.execute(0x000100E7);  // JALR x1, x2, 0      (target = 0x200)
+    EXPECT_EQ(cpu.get_register(1), 8u);     // return address = pc(4) + 4
+    EXPECT_EQ(cpu.get_pc(), 0x200u);
+}
+
+TEST(JALR, ClearsLSBOfTarget) {
+    CPU cpu;
+    cpu.execute(0x00300113);  // ADDI x2, x0, 3    (odd value)
+    cpu.execute(0x000100E7);  // JALR x1, x2, 0    (target = 3 & ~1 = 2)
+    EXPECT_EQ(cpu.get_pc(), 2u);
+}
+
+TEST(JALR, CallAndReturn) {
+    // Simulates a function call (JAL) and return (JALR ra, 0).
+    CPU cpu;
+    cpu.execute(0x100000EF);  // JAL x1, 0x100   → x1 = 4, pc = 0x100
+    EXPECT_EQ(cpu.get_pc(), 0x100u);
+    EXPECT_EQ(cpu.get_register(1), 4u);
+
+    cpu.execute(0x000080E7);  // JALR x1, x1, 0  → pc = x1 = 4 (return to caller)
+    EXPECT_EQ(cpu.get_pc(), 4u);
+}
+
+// ---- LUI ----
+
+TEST(LUI, LoadsUpperBits) {
+    CPU cpu;
+    cpu.execute(0x123450B7);  // LUI x1, 0x12345
+    EXPECT_EQ(cpu.get_register(1), 0x12345000u);
+}
+
+TEST(LUI, SetsHighBit) {
+    CPU cpu;
+    cpu.execute(0xFFFFF0B7);  // LUI x1, 0xFFFFF
+    EXPECT_EQ(cpu.get_register(1), 0xFFFFF000u);
+}
+
+TEST(LUI_ADDI, Builds32BitConstant) {
+    // The standard RISC-V pattern for loading a full 32-bit value.
+    // Compilers emit this pair for any constant that doesn't fit in 12 bits.
+    CPU cpu;
+    cpu.execute(0x123450B7);  // LUI  x1, 0x12345    → x1 = 0x12345000
+    cpu.execute(0x67808093);  // ADDI x1, x1, 0x678  → x1 = 0x12345678
+    EXPECT_EQ(cpu.get_register(1), 0x12345678u);
+}
+
+// ---- AUIPC ----
+
+TEST(AUIPC, AddsPCToUpperImmediate) {
+    CPU cpu;
+    cpu.execute(0x00500093);  // ADDI x1, x0, 5     (pc: 0 → 4)
+    cpu.execute(0x12345117);  // AUIPC x2, 0x12345   → x2 = 4 + 0x12345000
+    EXPECT_EQ(cpu.get_register(2), 0x12345004u);
+}
+
